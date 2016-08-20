@@ -13,6 +13,7 @@ import random
 
 import pandas as pd
 from sqlalchemy import String, DateTime, Date, Float, BigInteger, Integer, Boolean
+from sqlalchemy.dialects.postgresql import ARRAY, array
 
 from caravel import app, db, models, utils
 
@@ -65,7 +66,7 @@ def load_telligent():
         dtype={
             'derived_user_id': String(255),
             'user_id': String(255),
-            'amplitude_ids': String(255),
+            'amplitude_ids': ARRAY(String(255)),
             'domain_user_ids': String(255),
             'email' : String(255),
             'first_referrer' : String(255),
