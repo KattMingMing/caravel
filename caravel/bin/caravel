@@ -84,7 +84,10 @@ def load_examples(load_test_data):
 
     data.load_css_templates()
 
-    print("Loading energy related dataset")
+    print("Loading telligent related dataset")
+    data.load_telligent()
+
+    print("Loading energy related dataset yee")
     data.load_energy()
 
     print("Loading [World Bank's Health Nutrition and Population Stats]")

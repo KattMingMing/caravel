@@ -12,7 +12,7 @@ import datetime
 import random
 
 import pandas as pd
-from sqlalchemy import String, DateTime, Date, Float, BigInteger
+from sqlalchemy import String, DateTime, Date, Float, BigInteger, Integer, Boolean
 
 from caravel import app, db, models, utils
 
@@ -52,6 +52,67 @@ def get_slice_json(defaults, **kwargs):
     d.update(kwargs)
     return json.dumps(d, indent=4, sort_keys=True)
 
+def load_telligent():
+    """Loads an energy related dataset to use with sankey and graphs"""
+    tbl_name = 'telligent_data'
+    with gzip.open(os.path.join(DATA_FOLDER, 'users.json.gz')) as f:
+        pdf = pd.read_json(f)
+    pdf.to_sql(
+        tbl_name,
+        db.engine,
+        if_exists='replace',
+        chunksize=500,
+        dtype={
+            'derived_user_id': String(255),
+            'user_id': String(255),
+            'amplitude_ids': String(255),
+            'domain_user_ids': String(255),
+            'email' : String(255),
+            'first_referrer' : String(255),
+            'is_registered' : String(255),
+            'github_authed' : String(255),
+            'is_private_code_user': String(255),
+            'is_chrome_extension_user' : String(255),
+            'is_sfye_user' : String(255),
+            'is_sg_employee' : String(255),
+            'is_power_user' : String(255),
+            'power_user_date' : String(255),
+            'is_engaged_user' : String(255),
+            'first_week_of_engagement' : String(255),
+            'num_weeks_engaged' : BigInteger,
+            'signup_channel' : String(255),
+            'locale' : String(255),
+            'languages' : String(255),
+            'latest_language' : String(255),
+            'signup_date' : String(255),
+            'first_seen_date' : String(255),
+            'latest_seen_date' : String(255),
+            'first_search_date' : String(255),
+            'latest_search_date' : String(255),
+            'editors' : String(255),
+            'latest_editor' : String(255),
+            'orgs' : String(255),
+            'browsers' : String(255),
+            'latest_browser' : String(255),
+            'browser_versions' : String(255),
+            'latest_browser_version' : String(255),
+            'num_github_repos' : BigInteger,
+            'num_searches' : BigInteger,
+            'num_sessions' : BigInteger,
+
+        },
+        index=False)
+
+    print("Creating table [telligent_data] reference")
+    tbl = db.session.query(TBL).filter_by(table_name=tbl_name).first()
+    if not tbl:
+        tbl = TBL(table_name=tbl_name)
+    tbl.description = "Telligent data"
+    tbl.is_featured = True
+    tbl.database = get_or_create_db(db.session)
+    db.session.merge(tbl)
+    db.session.commit()
+    tbl.fetch_metadata()
 
 def load_energy():
     """Loads an energy related dataset to use with sankey and graphs"""
