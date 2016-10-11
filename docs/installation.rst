@@ -24,13 +24,13 @@ Here's how to install them:
 For **Debian** and **Ubuntu**, the following command will ensure that
 the required dependencies are installed: ::
 
-    sudo apt-get install build-essential libssl-dev libffi-dev python-dev python-pip
+    sudo apt-get install build-essential libssl-dev libffi-dev python-dev python-pip libsasl2-dev libldap2-dev
 
 For **Fedora** and **RHEL-derivatives**, the following command will ensure
 that the required dependencies are installed: ::
 
     sudo yum upgrade python-setuptools
-    sudo yum install gcc libffi-devel python-devel python-pip python-wheel openssl-devel
+    sudo yum install gcc libffi-devel python-devel python-pip python-wheel openssl-devel libsasl2-devel openldap-devel
 
 **OSX**, system python is not recommended. brew's python also ships with pip  ::
 
@@ -66,6 +66,13 @@ On windows the syntax for activating it is a bit different: ::
 Once you activated your virtualenv everything you are doing is confined inside the virtualenv.
 To exit a virtualenv just type ``deactivate``.
 
+Python's setup tools and pip
+----------------------------
+Put all the chances on your side by getting the very latest ``pip``
+and ``setuptools`` libraries.::
+
+    pip install --upgrade setuptools pip
+
 Caravel installation and initialization
 ---------------------------------------
 Follow these few simple steps to install Caravel.::
@@ -79,11 +86,11 @@ Follow these few simple steps to install Caravel.::
     # Initialize the database
     caravel db upgrade
 
-    # Create default roles and permissions
-    caravel init
-
     # Load some data to play with
     caravel load_examples
+
+    # Create default roles and permissions
+    caravel init
 
     # Start the web server on port 8088
     caravel runserver -p 8088
@@ -99,6 +106,11 @@ the credential you entered while creating the admin account, and navigate to
 your datasources for Caravel to be aware of, and they should show up in
 `Menu -> Datasources`, from where you can start playing with your data!
 
+Please note that *gunicorn*, Caravel default application server, does not
+work on Windows so you need to use the development web server.
+The development web server though is not intended to be used on production systems
+so better use a supported platform that can run *gunicorn*.
+
 Configuration behind a load balancer
 ------------------------------------
 
@@ -107,6 +119,10 @@ or ELB on AWS), you may need to utilise a healthcheck endpoint so that your
 load balancer knows if your caravel instance is running. This is provided
 at ``/health`` which will return a 200 response containing "OK" if the
 webserver is running.
+
+If the load balancer is inserting X-Forwarded-For/X-Forwarded-Proto headers, you
+should set `ENABLE_PROXY_FIX = True` in the caravel config file to extract and use
+the headers.
 
 
 Configuration
@@ -120,7 +136,7 @@ of the parameters you can copy / paste in that configuration module: ::
     # Caravel specific config
     #---------------------------------------------------------
     ROW_LIMIT = 5000
-    CARAVEL_WORKERS = 16
+    CARAVEL_WORKERS = 4
 
     CARAVEL_WEBSERVER_PORT = 8088
     #---------------------------------------------------------
@@ -293,7 +309,27 @@ Upgrading should be as straightforward as running::
 
     pip install caravel --upgrade
     caravel db upgrade
+    caravel init
 
+SQL Lab
+-------
+SQL Lab is a powerful SQL IDE that works with all SQLAlchemy compatible
+databases out there. By default, queries are run in a web request, and
+may eventually timeout as queries exceed the maximum duration of a web
+request in your environment, whether it'd be a reverse proxy or the Caravel
+server itself.
+
+In the modern analytics world, it's not uncommon to run large queries that
+run for minutes or hours.
+To enable support for long running queries that
+execute beyond the typical web request's timeout (30-60 seconds), it is
+necessary to deploy an asynchronous backend, which consist of one or many
+Caravel worker, which is implemented as a Celery worker, and a Celery
+broker for which we recommend using Redis or RabbitMQ.
+
+It's also preferable to setup an async result backend as a key value store
+that can hold the long-running query results for a period of time. More
+details to come as to how to set this up here soon.
 
 Making your own build
 ---------------------
@@ -308,4 +344,3 @@ your environment.::
     npm run prod
     cd $CARAVEL_HOME
     python setup.py install
-

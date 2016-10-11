@@ -1,9 +1,9 @@
 const $ = window.$ = require('jquery');
-const jQuery = window.jQuery = $;
+const jQuery = window.jQuery = require('jquery'); // eslint-disable-line
 const px = require('../modules/caravel.js');
 const d3 = require('d3');
 const urlLib = require('url');
-const showModal = require('../modules/utils.js').showModal;
+const utils = require('../modules/utils.js');
 
 import React from 'react';
 import { render } from 'react-dom';
@@ -41,7 +41,8 @@ function injectCss(className, css) {
 }
 
 function dashboardContainer(dashboardData) {
-  let dashboard = $.extend(dashboardData, {
+  let dashboard = Object.assign({}, utils.controllerInterface, dashboardData, {
+    type: 'dashboard',
     filters: {},
     init() {
       this.initDashboardView();
@@ -81,6 +82,50 @@ function dashboardContainer(dashboardData) {
     },
     setFilter(sliceId, col, vals, refresh) {
       this.addFilter(sliceId, col, vals, false, refresh);
+    },
+    done(slice) {
+      const refresh = slice.getWidgetHeader().find('.refresh');
+      const data = slice.data;
+      if (data !== undefined && data.is_cached) {
+        refresh
+        .addClass('danger')
+        .attr('title',
+              'Served from data cached at ' + data.cached_dttm +
+                '. Click to force refresh')
+                .tooltip('fixTitle');
+      } else {
+        refresh
+        .removeClass('danger')
+        .attr('title', 'Click to force refresh')
+        .tooltip('fixTitle');
+      }
+    },
+    effectiveExtraFilters(sliceId) {
+      // Summarized filter, not defined by sliceId
+      // returns k=field, v=array of values
+      const f = {};
+      const immuneSlices = this.metadata.filter_immune_slices || [];
+      if (sliceId && immuneSlices.includes(sliceId)) {
+        // The slice is immune to dashboard fiterls
+        return f;
+      }
+
+      // Building a list of fields the slice is immune to filters on
+      let immuneToFields = [];
+      if (
+            sliceId &&
+            this.metadata.filter_immune_slice_fields &&
+            this.metadata.filter_immune_slice_fields[sliceId]) {
+        immuneToFields = this.metadata.filter_immune_slice_fields[sliceId];
+      }
+      for (const filteringSliceId in this.filters) {
+        for (const field in this.filters[filteringSliceId]) {
+          if (!immuneToFields.includes(field)) {
+            f[field] = this.filters[filteringSliceId][field];
+          }
+        }
+      }
+      return f;
     },
     addFilter(sliceId, col, vals, merge = true, refresh = true) {
       if (!(sliceId in this.filters)) {
@@ -154,7 +199,7 @@ function dashboardContainer(dashboardData) {
     refreshExcept(sliceId) {
       const immune = this.metadata.filter_immune_slices || [];
       this.slices.forEach(function (slice) {
-        if (slice.data.slice_id !== sliceId && immune.indexOf(slice.data.sliceId) === -1) {
+        if (slice.data.slice_id !== sliceId && immune.indexOf(slice.data.slice_id) === -1) {
           slice.render();
         }
       });
@@ -223,7 +268,7 @@ function dashboardContainer(dashboardData) {
         },
         error(error) {
           const errorMsg = getAjaxErrorMsg(error);
-          showModal({
+          utils.showModal({
             title: 'Error',
             body: 'Sorry, there was an error adding slices to this dashboard: </ br>' + errorMsg,
           });
@@ -252,14 +297,14 @@ function dashboardContainer(dashboardData) {
           data: JSON.stringify(data),
         },
         success() {
-          showModal({
+          utils.showModal({
             title: 'Success',
             body: 'This dashboard was saved successfully.',
           });
         },
         error(error) {
           const errorMsg = this.getAjaxErrorMsg(error);
-          showModal({
+          utils.showModal({
             title: 'Error',
             body: 'Sorry, there was an error saving this dashboard: </ br>' + errorMsg,
           });
@@ -317,7 +362,7 @@ function dashboardContainer(dashboardData) {
         injectCss('dashboard-template', css);
       });
       $('#filters').click(() => {
-        showModal({
+        utils.showModal({
           title: '<span class="fa fa-info-circle"></span> Current Global Filters',
           body: 'The following global filters are currently applied:<br/>' +
                 dashboard.readFilters(),

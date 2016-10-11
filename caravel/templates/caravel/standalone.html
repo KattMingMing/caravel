@@ -1,6 +1,6 @@
 <html>
   <head>
-    <title>{{viz.token}}</title>
+    <title>{{ viz.token }}</title>
     <link rel="stylesheet" type="text/css" href="/static/assets/node_modules/font-awesome/css/font-awesome.min.css" />
     <link rel="stylesheet" type="text/css" href="/static/assets/stylesheets/caravel.css" />
     <link rel="stylesheet" type="text/css" href="/static/appbuilder/css/flags/flags16.css" />
@@ -23,7 +23,11 @@
       <div id="{{ viz.token }}_con" class="slice_container" style="height: 100%; width: 100%"></div>
     </div>
   </body>
-  <script src="/static/assets/javascripts/dist/css-theme.entry.js"></script>
-  <script src="/static/assets/javascripts/dist/standalone.entry.js"></script>
+  {% with filename="css-theme" %}
+    {% include "caravel/partials/_script_tag.html" %}
+  {% endwith %}
+  {% with filename="standalone" %}
+    {% include "caravel/partials/_script_tag.html" %}
+  {% endwith %}
 </html>
 

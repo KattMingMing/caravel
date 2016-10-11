@@ -10,7 +10,7 @@
         <span class="icon-bar"></span>
       </button>
       <a class="navbar-brand" href="{{appbuilder.get_url_for_index}}">
-        <img width="35" src="/static/assets/images/SourcegraphIcon.png" style="margin-top: -5px;" alt="Caravel">
+        <img width="75" src="/static/assets/images/caravel.png" style="padding-top: 2px;" alt="Caravel">
       </a>
     </div>
     <div class="navbar-collapse collapse">
@@ -18,15 +18,7 @@
         {% include 'appbuilder/navbar_menu.html' %}
       </ul>
       <ul class="nav navbar-nav navbar-right">
-        {% set WARNING_MSG = appbuilder.app.config.get('WARNING_MSG') %}
-        {% if WARNING_MSG %}
-          <li>
-            <div class="alert alert-danger" role="alert">
-              {{ WARNING_MSG | safe }}
-            </div>
-          </li>
-        {% endif %}
-        <li><a href="https://github.com/sourcegraph/sourcegraph" title="Sourcegraph's Github">
+        <li><a href="https://github.com/airbnb/caravel" title="Caravel's Github">
           <i class="fa fa-github fa-lg"></i></a>
         </li>
         <li><a href="http://airbnb.io/caravel" title="Documentation">
@@ -37,3 +29,12 @@
     </div>
   </div>
 </div>
+
+{% set WARNING_MSG = appbuilder.app.config.get('WARNING_MSG') %}
+{% if WARNING_MSG %}
+  <div class="container">
+    <div class="alert alert-danger">
+      {{ WARNING_MSG | safe }}
+    </div>
+  </div>
+{% endif %}

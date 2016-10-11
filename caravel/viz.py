@@ -65,7 +65,7 @@ class BaseViz(object):
         form_class = ff.get_form()
         defaults = form_class().data.copy()
         previous_viz_type = form_data.get('previous_viz_type')
-        if isinstance(form_data, ImmutableMultiDict):
+        if isinstance(form_data, (MultiDict, ImmutableMultiDict)):
             form = form_class(form_data)
         else:
             form = form_class(**form_data)
@@ -104,7 +104,7 @@ class BaseViz(object):
     def reassignments(self):
         pass
 
-    def get_url(self, for_cache_key=False, **kwargs):
+    def get_url(self, for_cache_key=False, json_endpoint=False, **kwargs):
         """Returns the URL for the viz
 
         :param for_cache_key: when getting the url as the identifier to hash
@@ -116,23 +116,36 @@ class BaseViz(object):
             del d['json']
         if 'action' in d:
             del d['action']
+        if 'slice_id' in d:
+            del d['slice_id']
         d.update(kwargs)
         # Remove unchecked checkboxes because HTML is weird like that
         od = MultiDict()
         for key in sorted(d.keys()):
-            if d[key] is False:
-                del d[key]
+            # if MultiDict is initialized with MD({key:[emptyarray]}),
+            # key is included in d.keys() but accessing it throws
+            try:
+                if d[key] is False:
+                    del d[key]
+                    continue
+            except IndexError:
+                pass
+
+            if isinstance(d, (MultiDict, ImmutableMultiDict)):
+                v = d.getlist(key)
             else:
-                if isinstance(d, MultiDict):
-                    v = d.getlist(key)
-                else:
-                    v = d.get(key)
-                if not isinstance(v, list):
-                    v = [v]
-                for item in v:
-                    od.add(key, item)
+                v = d.get(key)
+            if not isinstance(v, list):
+                v = [v]
+            for item in v:
+                od.add(key, item)
+
+        base_endpoint = '/caravel/explore'
+        if json_endpoint:
+            base_endpoint = '/caravel/explore_json'
+
         href = Href(
-            '/caravel/explore/{self.datasource.type}/'
+            '{base_endpoint}/{self.datasource.type}/'
             '{self.datasource.id}/'.format(**locals()))
         if for_cache_key and 'force' in od:
             del od['force']
@@ -165,12 +178,9 @@ class BaseViz(object):
             raise Exception("No data, review your incantations!")
         else:
             if 'timestamp' in df.columns:
-                if timestamp_format == "epoch_s":
+                if timestamp_format in ("epoch_s", "epoch_ms"):
                     df.timestamp = pd.to_datetime(
-                        df.timestamp, utc=False, unit="s")
-                elif timestamp_format == "epoch_ms":
-                    df.timestamp = pd.to_datetime(
-                        df.timestamp, utc=False, unit="ms")
+                        df.timestamp, utc=False)
                 else:
                     df.timestamp = pd.to_datetime(
                         df.timestamp, utc=False, format=timestamp_format)
@@ -188,6 +198,12 @@ class BaseViz(object):
     def form_class(self):
         return FormFactory(self).get_form()
 
+    def get_extra_filters(self):
+        extra_filters = self.form_data.get('extra_filters')
+        if not extra_filters:
+            return {}
+        return json.loads(extra_filters)
+
     def query_filters(self, is_having_filter=False):
         """Processes the filters for the query"""
         form_data = self.form_data
@@ -201,15 +217,17 @@ class BaseViz(object):
             if col and op and eq is not None:
                 filters.append((col, op, eq))
 
+        if is_having_filter:
+            return filters
+
         # Extra filters (coming from dashboard)
-        extra_filters = form_data.get('extra_filters')
-        if extra_filters and not is_having_filter:
-            extra_filters = json.loads(extra_filters)
-            for slice_filters in extra_filters.values():
-                for col, vals in slice_filters.items():
-                    if col and vals:
-                        if col in self.datasource.filterable_column_names:
-                            filters += [(col, 'in', ",".join(vals))]
+        for col, vals in self.get_extra_filters().items():
+            if not (col and vals):
+                continue
+            elif col in self.datasource.filterable_column_names:
+                # Quote values with comma to avoid conflict
+                vals = ["'{}'".format(x) if "," in x else x for x in vals]
+                filters += [(col, 'in', ",".join(vals))]
         return filters
 
     def query_obj(self):
@@ -217,17 +235,21 @@ class BaseViz(object):
         form_data = self.form_data
         groupby = form_data.get("groupby") or []
         metrics = form_data.get("metrics") or ['count']
-        granularity = \
+        extra_filters = self.get_extra_filters()
+        granularity = (
             form_data.get("granularity") or form_data.get("granularity_sqla")
+        )
         limit = int(form_data.get("limit", 0))
         row_limit = int(
             form_data.get("row_limit", config.get("ROW_LIMIT")))
-        since = form_data.get("since", "1 year ago")
+        since = (
+            extra_filters.get('__from') or form_data.get("since", "1 year ago")
+        )
         from_dttm = utils.parse_human_datetime(since)
         now = datetime.now()
         if from_dttm > now:
             from_dttm = now - (from_dttm - now)
-        until = form_data.get("until", "now")
+        until = extra_filters.get('__to') or form_data.get("until", "now")
         to_dttm = utils.parse_human_datetime(until)
         if from_dttm > to_dttm:
             flasher("The date range doesn't seem right.", "danger")
@@ -238,7 +260,7 @@ class BaseViz(object):
         extras = {
             'where': form_data.get("where", ''),
             'having': form_data.get("having", ''),
-            'having_druid': self.query_filters(True),
+            'having_druid': self.query_filters(is_having_filter=True),
             'time_grain_sqla': form_data.get("time_grain_sqla", ''),
             'druid_time_origin': form_data.get("druid_time_origin", ''),
         }
@@ -269,12 +291,12 @@ class BaseViz(object):
             return self.datasource.database.cache_timeout
         return config.get("CACHE_DEFAULT_TIMEOUT")
 
-    def get_json(self):
+    def get_json(self, force=False):
         """Handles caching around the json payload retrieval"""
         cache_key = self.cache_key
         payload = None
-
-        if self.form_data.get('force') != 'true':
+        force = force if force else self.form_data.get('force') == 'true'
+        if not force:
             payload = cache.get(cache_key)
 
         if payload:
@@ -285,7 +307,8 @@ class BaseViz(object):
                     cached_data = cached_data.decode('utf-8')
                 payload = json.loads(cached_data)
             except Exception as e:
-                logging.error("Error reading cache")
+                logging.error("Error reading cache: " +
+                              utils.error_msg_from_exception(e))
                 payload = None
             logging.info("Serving from cache")
 
@@ -354,7 +377,7 @@ class BaseViz(object):
 
     @property
     def json_endpoint(self):
-        return self.get_url(json="true")
+        return self.get_url(json_endpoint=True)
 
     @property
     def cache_key(self):
@@ -699,7 +722,7 @@ class BoxPlotViz(NVD3Viz):
     viz_type = "box_plot"
     verbose_name = _("Box Plot")
     sort_series = False
-    is_timeseries = False
+    is_timeseries = True
     fieldsets = ({
         'label': None,
         'fields': (
@@ -984,7 +1007,8 @@ class NVD3TimeSeriesViz(NVD3Viz):
             ('show_brush', 'show_legend'),
             ('rich_tooltip', 'y_axis_zero'),
             ('y_log_scale', 'contribution'),
-            ('line_interpolation', 'x_axis_showminmax'),
+            ('show_markers', 'x_axis_showminmax'),
+            ('line_interpolation', None),
             ('x_axis_format', 'y_axis_format'),
             ('x_axis_label', 'y_axis_label'),
         ),
@@ -1241,7 +1265,6 @@ class HistogramViz(BaseViz):
         }
     }
 
-
     def query_obj(self):
         """Returns the query object for this visualization"""
         d = super(HistogramViz, self).query_obj()
@@ -1251,7 +1274,6 @@ class HistogramViz(BaseViz):
             raise Exception("Must have one numeric column specified")
         d['columns'] = [numeric_column]
         return d
-
 
     def get_df(self, query_obj=None):
         """Returns a pandas dataframe based on the query object"""
@@ -1268,7 +1290,6 @@ class HistogramViz(BaseViz):
         df.replace([np.inf, -np.inf], np.nan)
         df = df.fillna(0)
         return df
-
 
     def get_data(self):
         """Returns the chart data"""
@@ -1625,6 +1646,7 @@ class FilterBoxViz(BaseViz):
     fieldsets = ({
         'label': None,
         'fields': (
+            ('date_filter', None),
             'groupby',
             'metric',
         )
@@ -1638,8 +1660,8 @@ class FilterBoxViz(BaseViz):
 
     def query_obj(self):
         qry = super(FilterBoxViz, self).query_obj()
-        groupby = self.form_data['groupby']
-        if len(groupby) < 1:
+        groupby = self.form_data.get('groupby')
+        if len(groupby) < 1 and not self.form_data.get('date_filter'):
             raise Exception("Pick at least one filter field")
         qry['metrics'] = [
             self.form_data['metric']]
@@ -1647,7 +1669,7 @@ class FilterBoxViz(BaseViz):
 
     def get_data(self):
         qry = self.query_obj()
-        filters = [g for g in qry['groupby']]
+        filters = [g for g in self.form_data['groupby']]
         d = {}
         for flt in filters:
             qry['groupby'] = [flt]

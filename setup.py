@@ -1,21 +1,26 @@
 import imp
 import os
+import json
 from setuptools import setup, find_packages
 
-version = imp.load_source(
-    'version', os.path.join('caravel', 'version.py'))
+BASE_DIR = os.path.abspath(os.path.dirname(__file__))
+PACKAGE_DIR = os.path.join(BASE_DIR, 'caravel', 'static', 'assets')
+PACKAGE_FILE = os.path.join(PACKAGE_DIR, 'package.json')
+with open(PACKAGE_FILE) as package_file:
+    version_string = json.load(package_file)['version']
 
 setup(
     name='caravel',
     description=(
         "A interactive data visualization platform build on SqlAlchemy "
         "and druid.io"),
-    version=version.VERSION_STRING,
+    version=version_string,
     packages=find_packages(),
     include_package_data=True,
     zip_safe=False,
     scripts=['caravel/bin/caravel'],
     install_requires=[
+        'celery==3.1.23',
         'cryptography==1.4',
         'flask-appbuilder==1.8.1',
         'flask-cache==0.13.1',
@@ -29,6 +34,7 @@ setup(
         'pandas==0.18.1',
         'parsedatetime==2.0.0',
         'pydruid==0.3.0',
+        'PyHive>=0.2.1',
         'python-dateutil==2.5.3',
         'requests==2.10.0',
         'simplejson==3.8.2',
@@ -36,6 +42,8 @@ setup(
         'sqlalchemy==1.0.13',
         'sqlalchemy-utils==0.32.7',
         'sqlparse==0.1.19',
+        'thrift>=0.9.3',
+        'thrift-sasl>=0.2.1',
         'werkzeug==0.11.10',
     ],
     extras_require={
@@ -51,7 +59,7 @@ setup(
     author_email='maximebeauchemin@gmail.com',
     url='https://github.com/airbnb/caravel',
     download_url=(
-        'https://github.com/airbnb/caravel/tarball/' + version.VERSION_STRING),
+        'https://github.com/airbnb/caravel/tarball/' + version_string),
     classifiers=[
         'Programming Language :: Python :: 2.7',
         'Programming Language :: Python :: 3.4',

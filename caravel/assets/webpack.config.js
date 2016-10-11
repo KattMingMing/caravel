@@ -1,25 +1,29 @@
 const webpack = require('webpack');
 const path = require('path');
+const fs = require('fs');
 
 // input dir
 const APP_DIR = path.resolve(__dirname, './');
 
 // output dir
-const BUILD_DIR = path.resolve(__dirname, './javascripts/dist');
+const BUILD_DIR = path.resolve(__dirname, './dist');
+
+const VERSION_STRING = JSON.parse(fs.readFileSync('package.json')).version;
 
 const config = {
   entry: {
     'css-theme': APP_DIR + '/javascripts/css-theme.js',
     dashboard: APP_DIR + '/javascripts/dashboard/Dashboard.jsx',
     explore: APP_DIR + '/javascripts/explore/explore.jsx',
+    explorev2: APP_DIR + '/javascripts/explorev2/index.jsx',
     welcome: APP_DIR + '/javascripts/welcome.js',
-    sql: APP_DIR + '/javascripts/sql.js',
     standalone: APP_DIR + '/javascripts/standalone.js',
     common: APP_DIR + '/javascripts/common.js',
+    sqllab: APP_DIR + '/javascripts/SqlLab/index.jsx',
   },
   output: {
     path: BUILD_DIR,
-    filename: '[name].entry.js',
+    filename: `[name].${VERSION_STRING}.entry.js`,
   },
   resolve: {
     extensions: [
